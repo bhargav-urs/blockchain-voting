@@ -1,0 +1,36 @@
+{
+  "name": "blockchain-voting",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Decentralised blockchain voting dApp — Next.js 14, Hardhat, MetaMask, Polygon Amoy.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy-local.js --network localhost",
+    "deploy:amoy": "hardhat run scripts/deploy-amoy.js --network amoy"
+  },
+  "dependencies": {
+    "ethers": "^6.13.2",
+    "next": "^14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "chai": "^4.5.0",
+    "dotenv": "^16.4.5",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15",
+    "hardhat": "^2.22.16",
+    "typescript": "^5.5.4"
+  }
+}

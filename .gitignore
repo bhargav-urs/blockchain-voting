@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Environment – NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Build
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+
+# Vercel
+.vercel/

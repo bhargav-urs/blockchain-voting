@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ChainVote — Complete Deployment Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&family=DM+Mono&display=swap');
+
+  :root {
+    --bg: #0a0907; --bg2: #131109; --bg3: #1a1712;
+    --gold: #f59e0b; --gold-dim: rgba(245,158,11,0.12);
+    --green: #4ade80; --green-dim: rgba(74,222,128,0.12);
+    --red: #f87171; --blue: #60a5fa;
+    --text: #f5f0e8; --muted: #a89880; --faint: #6b5c48;
+    --border: rgba(245,158,11,0.15); --border2: rgba(245,158,11,0.3);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    padding-bottom: 80px;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(245,158,11,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,158,11,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 60px 24px 48px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--gold-dim); border: 1px solid var(--border2);
+    border-radius: 20px; padding: 4px 16px;
+    font-size: 0.75rem; font-weight: 600; color: var(--gold);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'Syne', sans-serif; font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 800; line-height: 1.15; margin-bottom: 14px;
+  }
+  .hero h1 span { color: var(--gold); }
+  .hero p { color: var(--muted); font-size: 1.05rem; max-width: 560px; margin: 0 auto; }
+
+  /* TOC */
+  .toc {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px 28px; margin-bottom: 48px;
+  }
+  .toc h2 { font-family: 'Syne', sans-serif; font-size: 1rem; margin-bottom: 16px; color: var(--gold); }
+  .toc ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .toc li a {
+    color: var(--muted); text-decoration: none; font-size: 0.9rem;
+    transition: color 0.15s;
+  }
+  .toc li a:hover { color: var(--gold); }
+  .toc li a .num {
+    font-family: 'DM Mono', monospace; font-size: 0.75rem;
+    color: var(--faint); margin-right: 8px;
+  }
+
+  /* Sections */
+  .section { margin-bottom: 56px; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 24px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--gold-dim); border: 2px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    color: var(--gold); font-size: 0.9rem; flex-shrink: 0;
+  }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; }
+  .section-sub { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+
+  /* Steps */
+  .step {
+    display: flex; gap: 16px; margin-bottom: 28px;
+    padding-bottom: 28px; border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .step-dot {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: var(--bg3); border: 2px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: var(--gold);
+    margin-top: 2px;
+  }
+  .step-body h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+  .step-body p { color: var(--muted); font-size: 0.9rem; margin-bottom: 10px; }
+  .step-body p:last-child { margin-bottom: 0; }
+
+  /* Code blocks */
+  pre {
+    background: #050403; border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 16px 20px;
+    font-family: 'DM Mono', monospace; font-size: 0.82rem;
+    color: var(--gold); overflow-x: auto; margin: 10px 0;
+    position: relative; line-height: 1.6;
+  }
+  pre .comment { color: var(--faint); }
+  pre .success { color: var(--green); }
+  pre .url { color: var(--blue); }
+  code {
+    font-family: 'DM Mono', monospace; font-size: 0.82em;
+    background: var(--bg3); padding: 2px 6px; border-radius: 4px;
+    color: var(--gold); border: 1px solid var(--border);
+  }
+
+  /* Alerts */
+  .alert {
+    display: flex; gap: 10px; padding: 12px 16px;
+    border-radius: var(--radius); margin: 12px 0; font-size: 0.875rem;
+  }
+  .alert-warn { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; }
+  .alert-info { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+  .alert-success { background: var(--green-dim); border: 1px solid rgba(74,222,128,0.3); color: var(--green); }
+  .alert-icon { font-size: 1rem; flex-shrink: 0; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.875rem; }
+  th {
+    background: var(--bg3); color: var(--gold);
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--border2);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  td code { font-size: 0.78em; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Card */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px; margin: 12px 0;
+  }
+  .card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; color: var(--gold); }
+
+  /* Env block */
+  .env-block {
+    background: #050403; border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 16px 20px; margin: 10px 0;
+    font-family: 'DM Mono', monospace; font-size: 0.8rem; line-height: 2;
+  }
+  .env-key { color: var(--blue); }
+  .env-val { color: var(--green); }
+  .env-comment { color: var(--faint); }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 48px 0; }
+
+  /* Final success box */
+  .final {
+    background: linear-gradient(135deg, rgba(74,222,128,0.08), rgba(245,158,11,0.05));
+    border: 1px solid rgba(74,222,128,0.3);
+    border-radius: 16px; padding: 36px; text-align: center; margin-top: 48px;
+  }
+  .final .icon { font-size: 3rem; margin-bottom: 16px; }
+  .final h2 { font-family: 'Syne', sans-serif; font-size: 1.8rem; margin-bottom: 10px; color: var(--green); }
+  .final p { color: var(--muted); max-width: 500px; margin: 0 auto 20px; }
+  .final .pill {
+    display: inline-block; background: var(--green-dim);
+    border: 1px solid rgba(74,222,128,0.3); border-radius: 20px;
+    padding: 4px 14px; font-size: 0.8rem; color: var(--green);
+    margin: 4px;
+  }
+
+  @media (max-width: 600px) {
+    .step { flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">⛓ ChainVote · Deployment Guide</div>
+  <h1>Push to GitHub &amp;<br /><span>Deploy Live for Free</span></h1>
+  <p>Complete step-by-step guide — contracts on Polygon Amoy, frontend on Vercel. Transactions persist forever on the blockchain.</p>
+</div>
+
+<div class="wrap">
+
+  <div class="toc">
+    <h2>📋 What we'll do</h2>
+    <ol>
+      <li><a href="#s1"><span class="num">01</span> Install prerequisites (Git, Node, MetaMask)</a></li>
+      <li><a href="#s2"><span class="num">02</span> Create admin wallet &amp; get free MATIC</a></li>
+      <li><a href="#s3"><span class="num">03</span> Configure your project (.env.local)</a></li>
+      <li><a href="#s4"><span class="num">04</span> Deploy smart contracts to Polygon Amoy</a></li>
+      <li><a href="#s5"><span class="num">05</span> Push code to GitHub</a></li>
+      <li><a href="#s6"><span class="num">06</span> Deploy frontend to Vercel</a></li>
+      <li><a href="#s7"><span class="num">07</span> Set environment variables on Vercel</a></li>
+      <li><a href="#s8"><span class="num">08</span> Test the live app end-to-end</a></li>
+      <li><a href="#s9"><span class="num">09</span> How to view transactions on PolygonScan</a></li>
+      <li><a href="#s10"><span class="num">10</span> Student voting guide</a></li>
+    </ol>
+  </div>
+
+  <!-- ── SECTION 1 ── -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div>
+        <div class="section-title">Install Prerequisites</div>
+        <div class="section-sub">One-time setup on your Mac — skip anything already installed</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Check if Git is installed</h3>
+        <p>Open Terminal (press ⌘ + Space, type "Terminal", press Enter) and run:</p>
+        <pre>git --version</pre>
+        <p>If you see something like <code>git version 2.x.x</code> — you're good. If not, go to <strong>git-scm.com</strong> and download Git for Mac.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Check if Node.js is installed</h3>
+        <pre>node --version</pre>
+        <p>You need version 18 or higher. If not installed, go to <strong>nodejs.org</strong> → download the LTS version → install it.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Make sure MetaMask is installed</h3>
+        <p>You already have this from local testing. ✅</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">D</div>
+      <div class="step-body">
+        <h3>Create a GitHub account (if you don't have one)</h3>
+        <p>Go to <strong>github.com</strong> → Sign up → it's free. Remember your username — you'll need it.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">E</div>
+      <div class="step-body">
+        <h3>Create a Vercel account (if you don't have one)</h3>
+        <p>Go to <strong>vercel.com</strong> → Continue with GitHub → Authorise. This links them together so deployment is automatic later.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2 ── -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div>
+        <div class="section-title">Create Admin Wallet &amp; Get Free MATIC</div>
+        <div class="section-sub">Your wallet deploys the contract and becomes the permanent admin</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Create a dedicated admin wallet in MetaMask</h3>
+        <p>Don't use your existing wallet — create a fresh one just for ChainVote:</p>
+        <p>1. Open MetaMask → click the <strong>circle icon</strong> at the top right<br />
+           2. Click <strong>"Add account or hardware wallet"</strong><br />
+           3. Click <strong>"Add new Ethereum account"</strong><br />
+           4. Name it <code>ChainVote Admin</code> → click Create</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Export and save the private key</h3>
+        <div class="alert alert-warn">
+          <span class="alert-icon">⚠️</span>
+          <span><strong>Never share this key with anyone. Never put it in GitHub.</strong> This key controls your admin wallet.</span>
+        </div>
+        <p>1. In MetaMask, click the <strong>three dots (⋮)</strong> next to "ChainVote Admin"<br />
+           2. Click <strong>"Account details"</strong><br />
+           3. Click <strong>"Show private key"</strong><br />
+           4. Enter your MetaMask password<br />
+           5. Copy the key — it starts with <code>0x</code> and is 66 characters long<br />
+           6. Save it in your Notes app or password manager</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Copy your wallet address</h3>
+        <p>In MetaMask, make sure "ChainVote Admin" is selected. Click the address shown below the account name — it copies it. Save this too. It looks like: <code>0xf39Fd6...2266</code></p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">D</div>
+      <div class="step-body">
+        <h3>Add Polygon Amoy network to MetaMask</h3>
+        <p>1. Open MetaMask → click the network dropdown at the top<br />
+           2. Click <strong>"Add a custom network"</strong> (or "Add network manually")<br />
+           3. Fill in exactly:</p>
+        <table>
+          <tr><th>Field</th><th>Value</th></tr>
+          <tr><td>Network name</td><td><code>Polygon Amoy</code></td></tr>
+          <tr><td>New RPC URL</td><td><code>https://rpc-amoy.polygon.technology/</code></td></tr>
+          <tr><td>Chain ID</td><td><code>80002</code></td></tr>
+          <tr><td>Currency symbol</td><td><code>MATIC</code></td></tr>
+          <tr><td>Block explorer URL</td><td><code>https://amoy.polygonscan.com</code></td></tr>
+        </table>
+        <p>4. Click <strong>Save</strong> → MetaMask switches to Polygon Amoy</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">E</div>
+      <div class="step-body">
+        <h3>Get free test MATIC from the faucet</h3>
+        <p>This pays the gas fee to deploy the contract. Completely free:</p>
+        <p>1. Go to <strong>faucet.polygon.technology</strong><br />
+           2. Select <strong>Amoy</strong> from the network dropdown<br />
+           3. Paste your ChainVote Admin wallet address<br />
+           4. Click <strong>Submit</strong><br />
+           5. Wait ~30 seconds</p>
+        <div class="alert alert-success">
+          <span class="alert-icon">✅</span>
+          <span>Verify you received MATIC: go to <strong>amoy.polygonscan.com</strong> → search your wallet address → you should see 0.5 MATIC balance.</span>
+        </div>
+        <div class="alert alert-info">
+          <span class="alert-icon">ℹ️</span>
+          <span>If the faucet is down, try: <strong>faucets.chain.link</strong> or <strong>mumbaifaucet.com</strong> (select Amoy).</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 3 ── -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div>
+        <div class="section-title">Configure Your Project</div>
+        <div class="section-sub">Set up .env.local with your private key and network settings</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Open your project folder in Terminal</h3>
+        <pre>cd ~/Desktop/blockchain-voting
+<span class="comment"># or wherever you unzipped the project</span></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Create your .env.local file</h3>
+        <pre>cp .env.example .env.local</pre>
+        <p>Now open <code>.env.local</code> in any text editor (TextEdit, VS Code, Cursor, etc.) and fill it in exactly like this:</p>
+        <div class="env-block">
+          <span class="env-comment"># ── Network ─────────────────────────────────────────────</span><br />
+          <span class="env-key">NEXT_PUBLIC_RPC_URL</span>=<span class="env-val">https://rpc-amoy.polygon.technology/</span><br />
+          <span class="env-key">NEXT_PUBLIC_CHAIN_ID</span>=<span class="env-val">80002</span><br />
+          <span class="env-key">NEXT_PUBLIC_CHAIN_HEX</span>=<span class="env-val">0x13882</span><br />
+          <span class="env-key">NEXT_PUBLIC_CHAIN_NAME</span>=<span class="env-val">Polygon Amoy</span><br />
+          <span class="env-key">NEXT_PUBLIC_EXPLORER_BASE_URL</span>=<span class="env-val">https://amoy.polygonscan.com</span><br />
+          <br />
+          <span class="env-comment"># ── Contract (deploy script fills this automatically) ────</span><br />
+          <span class="env-key">NEXT_PUBLIC_FACTORY_ADDRESS</span>=<span class="env-val"></span><br />
+          <span class="env-key">NEXT_PUBLIC_ADMIN_ADDRESS</span>=<span class="env-val">0xYOUR_ADMIN_WALLET_ADDRESS</span><br />
+          <br />
+          <span class="env-comment"># ── Deployer key — NEVER SHARE OR COMMIT ────────────────</span><br />
+          <span class="env-key">PRIVATE_KEY</span>=<span class="env-val">0xYOUR_PRIVATE_KEY_HERE</span>
+        </div>
+        <div class="alert alert-warn">
+          <span class="alert-icon">⚠️</span>
+          <span>Replace <code>0xYOUR_PRIVATE_KEY_HERE</code> with the actual private key you saved in Step 2B. Replace <code>0xYOUR_ADMIN_WALLET_ADDRESS</code> with your wallet address from Step 2C.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Install dependencies (if not done yet)</h3>
+        <pre>npm install</pre>
+        <p>This takes 1–2 minutes. Warnings about deprecated packages are normal — ignore them.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 4 ── -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div>
+        <div class="section-title">Deploy Smart Contracts to Polygon Amoy</div>
+        <div class="section-sub">This puts your contracts on the real blockchain — permanently and for free</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Run the deploy command</h3>
+        <p>In your Terminal (make sure you're in the blockchain-voting folder):</p>
+        <pre>npm run deploy:amoy</pre>
+        <p>This will take about 30–60 seconds. You should see:</p>
+        <pre><span class="success">Deploying to Polygon Amoy (testnet)
+Deployer: 0xYOUR_ADDRESS
+Balance: 0.5 MATIC
+
+Deploying ElectionFactory...
+
+✅ ElectionFactory deployed!
+   Address: 0xABC123DEF456...
+   Tx Hash: 0x789...
+   Explorer: https://amoy.polygonscan.com/address/0xABC123...
+
+📝 .env.local updated.</span></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Verify it worked</h3>
+        <p>1. Open your <code>.env.local</code> file — you'll see <code>NEXT_PUBLIC_FACTORY_ADDRESS</code> is now filled in automatically.<br />
+           2. Copy that address and paste it into <strong>amoy.polygonscan.com</strong> — you should see the contract page.</p>
+        <div class="alert alert-success">
+          <span class="alert-icon">✅</span>
+          <span>If you see the contract on PolygonScan, it's live on the blockchain forever. Even if you close your Mac right now, it's there.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>If deployment fails</h3>
+        <p><strong>Error: "insufficient funds"</strong> → Your wallet doesn't have MATIC. Go back to the faucet (Step 2E).</p>
+        <p><strong>Error: "could not detect network"</strong> → Check your <code>NEXT_PUBLIC_RPC_URL</code> in .env.local is exactly <code>https://rpc-amoy.polygon.technology/</code></p>
+        <p><strong>Error: "invalid private key"</strong> → Make sure your <code>PRIVATE_KEY</code> starts with <code>0x</code> and is 66 characters long.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 5 ── -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div>
+        <div class="section-title">Push Code to GitHub</div>
+        <div class="section-sub">Create a repository and push your code — private key stays safe</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Create a new GitHub repository</h3>
+        <p>1. Go to <strong>github.com</strong> → click the <strong>"+"</strong> icon (top right) → <strong>"New repository"</strong><br />
+           2. Fill in:<br />
+           &nbsp;&nbsp;&nbsp;• Repository name: <code>blockchain-voting</code><br />
+           &nbsp;&nbsp;&nbsp;• Description: <code>Decentralised blockchain voting app</code><br />
+           &nbsp;&nbsp;&nbsp;• Visibility: <strong>Private</strong> (recommended) or Public<br />
+           3. <strong>Do NOT tick</strong> "Add a README file" or "Add .gitignore" — the project already has these<br />
+           4. Click <strong>"Create repository"</strong></p>
+        <p>GitHub will show you a page with commands. Keep that page open.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Confirm .env.local is excluded</h3>
+        <p>Run this to make absolutely sure your private key won't be uploaded:</p>
+        <pre>cat .gitignore | grep env</pre>
+        <p>You should see <code>.env.local</code> in the output. If you do — you're safe to continue.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Initialise Git and push</h3>
+        <p>Run these commands one by one in your Terminal:</p>
+        <pre><span class="comment"># Step 1: Initialise git in your project</span>
+git init
+
+<span class="comment"># Step 2: Add all files</span>
+git add .
+
+<span class="comment"># Step 3: Check what's being added (.env.local should NOT appear)</span>
+git status
+
+<span class="comment"># Step 4: Create the first commit</span>
+git commit -m "feat: ChainVote blockchain voting app"
+
+<span class="comment"># Step 5: Rename the branch to main</span>
+git branch -M main
+
+<span class="comment"># Step 6: Connect to your GitHub repo (replace YOUR_USERNAME)</span>
+git remote add origin https://github.com/YOUR_USERNAME/blockchain-voting.git
+
+<span class="comment"># Step 7: Push to GitHub</span>
+git push -u origin main</pre>
+        <p>When prompted, enter your GitHub username and password. If GitHub asks for a token instead of password, go to: <strong>github.com → Settings → Developer settings → Personal access tokens → Generate new token (classic)</strong> → tick "repo" → copy the token and use it as your password.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">D</div>
+      <div class="step-body">
+        <h3>Verify on GitHub</h3>
+        <p>Go to <strong>github.com/YOUR_USERNAME/blockchain-voting</strong> — you should see all your files. Confirm that <code>.env.local</code> is <strong>NOT</strong> listed.</p>
+        <div class="alert alert-success">
+          <span class="alert-icon">✅</span>
+          <span>Your code is now on GitHub. Your private key is safe (not uploaded).</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 6 ── -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div>
+        <div class="section-title">Deploy Frontend to Vercel</div>
+        <div class="section-sub">Free hosting — your app gets a public URL anyone can access</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Install Vercel CLI</h3>
+        <pre>npm install -g vercel</pre>
+        <p>Verify it installed:</p>
+        <pre>vercel --version</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Login to Vercel</h3>
+        <pre>vercel login</pre>
+        <p>It will ask how to log in — choose <strong>"Continue with GitHub"</strong>. Your browser will open and ask you to authorise. Click Authorise.</p>
+        <p>You'll see <span style="color: var(--green);">✅ Logged in</span> in the terminal.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Deploy to Vercel</h3>
+        <p>Make sure you're in the blockchain-voting folder, then run:</p>
+        <pre>vercel --prod</pre>
+        <p>Answer the questions like this:</p>
+        <pre><span class="comment">? Set up and deploy? → Y (press Enter)</span>
+<span class="comment">? Which scope? → select your username</span>
+<span class="comment">? Link to existing project? → N</span>
+<span class="comment">? What's your project's name? → blockchain-voting (press Enter)</span>
+<span class="comment">? In which directory is your code located? → ./ (press Enter)</span>
+<span class="comment">? Want to modify these settings? → N (press Enter)</span></pre>
+        <p>Vercel will build and deploy. After ~2 minutes you'll see:</p>
+        <pre><span class="success">✅  Production: https://blockchain-voting-abc123.vercel.app</span></pre>
+        <p><strong>Copy this URL</strong> — this is your live app!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 7 ── -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div>
+        <div class="section-title">Set Environment Variables on Vercel</div>
+        <div class="section-sub">The app needs your contract address and network settings to work</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Open Vercel Dashboard</h3>
+        <p>Go to <strong>vercel.com/dashboard</strong> → click on your <code>blockchain-voting</code> project → click <strong>Settings</strong> (top tab) → click <strong>Environment Variables</strong> (left sidebar).</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Add each variable</h3>
+        <p>For each row below: type the name in the "Key" box, paste the value in "Value", make sure <strong>Production, Preview, Development</strong> are all ticked, then click <strong>Save</strong>.</p>
+        <table>
+          <tr><th>Key (Name)</th><th>Value</th></tr>
+          <tr><td><code>NEXT_PUBLIC_RPC_URL</code></td><td><code>https://rpc-amoy.polygon.technology/</code></td></tr>
+          <tr><td><code>NEXT_PUBLIC_CHAIN_ID</code></td><td><code>80002</code></td></tr>
+          <tr><td><code>NEXT_PUBLIC_CHAIN_HEX</code></td><td><code>0x13882</code></td></tr>
+          <tr><td><code>NEXT_PUBLIC_CHAIN_NAME</code></td><td><code>Polygon Amoy</code></td></tr>
+          <tr><td><code>NEXT_PUBLIC_FACTORY_ADDRESS</code></td><td>Paste from your .env.local (starts with 0x)</td></tr>
+          <tr><td><code>NEXT_PUBLIC_EXPLORER_BASE_URL</code></td><td><code>https://amoy.polygonscan.com</code></td></tr>
+          <tr><td><code>NEXT_PUBLIC_ADMIN_ADDRESS</code></td><td>Your ChainVote Admin wallet address</td></tr>
+        </table>
+        <div class="alert alert-warn">
+          <span class="alert-icon">⚠️</span>
+          <span>Do <strong>NOT</strong> add <code>PRIVATE_KEY</code> to Vercel. That key is only needed for deploying contracts, never for the frontend.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Redeploy to apply the variables</h3>
+        <p>Environment variables only apply after a fresh deployment. Run:</p>
+        <pre>vercel --prod</pre>
+        <p>Or in the Vercel dashboard → Deployments tab → click the three dots on the latest deployment → <strong>Redeploy</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 8 ── -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div>
+        <div class="section-title">Test the Live App End-to-End</div>
+        <div class="section-sub">Make sure everything works before sharing with students</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>Open your live URL</h3>
+        <p>Go to your Vercel URL (e.g. <code>https://blockchain-voting-abc123.vercel.app</code>). You should see the ChainVote landing page with the amber design.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>Connect admin wallet and create a test election</h3>
+        <p>1. Make sure MetaMask is on <strong>Polygon Amoy</strong> and using your <strong>ChainVote Admin</strong> account<br />
+           2. Click <strong>Admin</strong> in the nav → Connect MetaMask<br />
+           3. You should see a green <strong>Admin</strong> badge next to your address<br />
+           4. Create a test election with start = now, end = 1 hour from now<br />
+           5. Approve the MetaMask popup (costs ~0.001 MATIC)<br />
+           6. Activate the election</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>Register a voter and test voting</h3>
+        <p>1. In MetaMask, create or switch to a second account (Account #2)<br />
+           2. Copy its address<br />
+           3. In the Admin Portal → Manage → Register Voters → paste the address → Register<br />
+           4. Switch MetaMask to Account #2<br />
+           5. Go to the election ballot page → select a candidate → Vote<br />
+           6. Approve in MetaMask → vote recorded! ✅</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">D</div>
+      <div class="step-body">
+        <h3>Verify the transaction on PolygonScan</h3>
+        <p>1. After voting, scroll down on the ballot page to the <strong>On-Chain Transaction Log</strong><br />
+           2. Click the transaction hash link → PolygonScan opens<br />
+           3. You'll see the real blockchain transaction with timestamp, block, and gas used</p>
+        <div class="alert alert-success">
+          <span class="alert-icon">✅</span>
+          <span>If you can see it on PolygonScan — that vote is permanent. It will be there forever even if you delete your app, close your laptop, or the Vercel site goes down.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 9 ── -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <div>
+        <div class="section-title">How to View Transactions on PolygonScan</div>
+        <div class="section-sub">Anyone can verify the election results independently</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">A</div>
+      <div class="step-body">
+        <h3>View all elections (factory contract)</h3>
+        <p>Go to:</p>
+        <pre><span class="url">https://amoy.polygonscan.com/address/YOUR_FACTORY_ADDRESS</span></pre>
+        <p>You'll see every transaction — including every election that was created.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">B</div>
+      <div class="step-body">
+        <h3>View votes for a specific election</h3>
+        <p>Copy the election contract address from the ballot page (Contract Details section) and paste it into PolygonScan:</p>
+        <pre><span class="url">https://amoy.polygonscan.com/address/ELECTION_CONTRACT_ADDRESS</span></pre>
+        <p>Click the <strong>Events</strong> tab to see every <code>VoteCast</code> event — one per vote.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">C</div>
+      <div class="step-body">
+        <h3>What anyone can see vs what's private</h3>
+        <table>
+          <tr><th>Visible on PolygonScan</th><th>Private / Not shown in UI</th></tr>
+          <tr><td>✅ A vote happened</td><td>🔒 Which candidate was chosen</td></tr>
+          <tr><td>✅ Exact timestamp</td><td>🔒 (candidate ID is encoded in tx data)</td></tr>
+          <tr><td>✅ Block number</td><td>&nbsp;</td></tr>
+          <tr><td>✅ Transaction hash</td><td>&nbsp;</td></tr>
+          <tr><td>✅ Total vote count</td><td>&nbsp;</td></tr>
+          <tr><td>✅ Gas fee paid (tiny)</td><td>&nbsp;</td></tr>
+        </table>
+        <div class="alert alert-info">
+          <span class="alert-icon">ℹ️</span>
+          <span>The voter's wallet address IS technically visible on PolygonScan in the raw transaction data — this is how public blockchains work. Your app's UI never displays who voted for whom. For a classroom setting this level of privacy is appropriate and expected.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 10 ── -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div>
+        <div class="section-title">Student Voting Guide</div>
+        <div class="section-sub">Share this with your students — everything they need to vote</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>📋 What to tell your students</h4>
+      <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 12px;">Send them these instructions along with the election link:</p>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">1</div>
+      <div class="step-body">
+        <h3>Install MetaMask</h3>
+        <p>Go to <strong>metamask.io</strong> → install the browser extension → create a wallet → save your seed phrase.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">2</div>
+      <div class="step-body">
+        <h3>Add Polygon Amoy network</h3>
+        <p>Open MetaMask → network dropdown → Add network manually → fill in:</p>
+        <table>
+          <tr><th>Field</th><th>Value</th></tr>
+          <tr><td>Network name</td><td><code>Polygon Amoy</code></td></tr>
+          <tr><td>RPC URL</td><td><code>https://rpc-amoy.polygon.technology/</code></td></tr>
+          <tr><td>Chain ID</td><td><code>80002</code></td></tr>
+          <tr><td>Currency symbol</td><td><code>MATIC</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">3</div>
+      <div class="step-body">
+        <h3>Get free test MATIC (gas fee)</h3>
+        <p>Go to <strong>faucet.polygon.technology</strong> → select Amoy → paste your wallet address → Submit. Wait 30 seconds.</p>
+        <p>This is a one-time step. You only need to do it once ever.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">4</div>
+      <div class="step-body">
+        <h3>Give the teacher your wallet address</h3>
+        <p>Open MetaMask → click your account name → copy the address shown (starts with 0x). Send it to your teacher so they can register you as a voter.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-dot">5</div>
+      <div class="step-body">
+        <h3>Click the election link and vote</h3>
+        <p>1. Click the link your teacher sent<br />
+           2. Click <strong>Connect MetaMask</strong> on the ballot page<br />
+           3. Make sure MetaMask is on <strong>Polygon Amoy</strong> network<br />
+           4. You should see <strong>Registered: ✓ Yes</strong><br />
+           5. Click a candidate to select → click <strong>Vote for [Name]</strong><br />
+           6. Confirm the MetaMask popup → done! ✅</p>
+        <div class="alert alert-info">
+          <span class="alert-icon">ℹ️</span>
+          <span>Your vote costs less than $0.001 in test MATIC — effectively free. You can only vote once. Your choice is private but the fact that you voted is public on the blockchain.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── FINAL ── -->
+  <div class="final">
+    <div class="icon">🎉</div>
+    <h2>You're live!</h2>
+    <p>Your ChainVote app is deployed, permanent, and free. Transactions on Polygon Amoy persist forever.</p>
+    <div style="margin-top: 16px;">
+      <span class="pill">✅ Smart contracts on Polygon Amoy</span>
+      <span class="pill">✅ Frontend on Vercel</span>
+      <span class="pill">✅ Transactions on PolygonScan</span>
+      <span class="pill">✅ 100% Free</span>
+      <span class="pill">✅ Permanent</span>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+</body>
+</html>
