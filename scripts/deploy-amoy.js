@@ -19,9 +19,9 @@ async function main() {
   console.log("\nDeploying ElectionFactory...");
   const Factory = await hre.ethers.getContractFactory("ElectionFactory");
 
-  // Get current gas price and add 20% buffer — prevents "underpriced" errors
-  const feeData = await hre.ethers.provider.getFeeData();
-  const gasPrice = feeData.gasPrice * 120n / 100n;
+  // Use a fixed reasonable gas price (50 gwei) instead of network's spiked price
+  // Amoy's reported gas price can spike to absurd levels but actual cost is much lower
+  const gasPrice = hre.ethers.parseUnits("50", "gwei");
   console.log("Gas price:", hre.ethers.formatUnits(gasPrice, "gwei"), "gwei");
 
   const factory = await Factory.deploy({ gasPrice });
@@ -35,7 +35,6 @@ async function main() {
   console.log("   Tx Hash:", txHash);
   console.log("   Explorer: https://amoy.polygonscan.com/address/" + factoryAddress);
 
-  // Update .env.local
   const envPath = path.join(__dirname, "../.env.local");
   const envContent = `NEXT_PUBLIC_RPC_URL=https://rpc-amoy.polygon.technology/
 NEXT_PUBLIC_CHAIN_ID=80002
@@ -48,20 +47,9 @@ NEXT_PUBLIC_ADMIN_ADDRESS=${deployer.address}
   fs.writeFileSync(envPath, envContent);
   console.log("\n📝 .env.local updated.");
 
-  if (process.env.POLYGONSCAN_API_KEY) {
-    console.log("\nVerifying on PolygonScan...");
-    try {
-      await hre.run("verify:verify", { address: factoryAddress, constructorArguments: [] });
-      console.log("✅ Verified on PolygonScan");
-    } catch (e) {
-      console.log("⚠️  Verification failed:", e.message);
-    }
-  }
-
   console.log("\n🚀 Next steps:");
-  console.log("   1. Run 'npm run dev' and open http://localhost:3000");
-  console.log("   2. Connect MetaMask to Polygon Amoy");
-  console.log("   3. Go to /admin to create your first election");
+  console.log("   1. Copy NEXT_PUBLIC_FACTORY_ADDRESS to Vercel env vars");
+  console.log("   2. Redeploy with: npx vercel --prod");
 }
 
 main().catch((err) => {

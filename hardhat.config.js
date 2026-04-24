@@ -4,9 +4,7 @@ require("dotenv").config();
 module.exports = {
   solidity: {
     version: "0.8.24",
-    settings: {
-      optimizer: { enabled: true, runs: 200 },
-    },
+    settings: { optimizer: { enabled: true, runs: 200 } },
   },
   networks: {
     hardhat: {
@@ -17,11 +15,12 @@ module.exports = {
     },
     amoy: {
       url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology/",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: process.env.PRIVATE_KEY
+        ? [process.env.PRIVATE_KEY.startsWith("0x") ? process.env.PRIVATE_KEY : "0x" + process.env.PRIVATE_KEY]
+        : [],
       chainId: 80002,
-      // Explicit gas settings to avoid overspending
       gas: 3000000,
-      gasMultiplier: 1.2,
+      gasPrice: 50000000000, // 50 gwei
     },
   },
   etherscan: {

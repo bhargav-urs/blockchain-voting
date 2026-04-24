@@ -66,6 +66,24 @@ async function getSigner(): Promise<ethers.Signer> {
   return provider.getSigner();
 }
 
+// Polygon Amoy often has minimum gas requirements that MetaMask doesn't fetch correctly.
+// We manually read the current gas price from the network and add 25% buffer to ensure
+// transactions get accepted on first try.
+async function getGasOverrides(): Promise<{ gasPrice?: bigint; maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint }> {
+  try {
+    const provider = getWriteProvider();
+    const feeData = await provider.getFeeData();
+    // Amoy requires minimum 25 gwei — we bump it to at least 30 gwei with buffer
+    const MIN_GAS_PRICE = ethers.parseUnits("30", "gwei");
+    const networkGasPrice = feeData.gasPrice ?? MIN_GAS_PRICE;
+    const bumpedGasPrice = (networkGasPrice * BigInt(125)) / BigInt(100);
+    const finalGasPrice = bumpedGasPrice > MIN_GAS_PRICE ? bumpedGasPrice : MIN_GAS_PRICE;
+    return { gasPrice: finalGasPrice };
+  } catch {
+    return { gasPrice: ethers.parseUnits("30", "gwei") };
+  }
+}
+
 // ─────────────────────────── Factory Service ──────────────────────────────
 
 export const FactoryService = {
@@ -104,7 +122,8 @@ export const FactoryService = {
     endTime: number,
   ): Promise<{ hash: string; address: string }> {
     const contract = await this.writeContract();
-    const tx = await contract.createElection(title, description, candidates, startTime, endTime);
+    const overrides = await getGasOverrides();
+    const tx = await contract.createElection(title, description, candidates, startTime, endTime, overrides);
     const receipt: TransactionReceipt = await tx.wait();
     const log = receipt.logs.find(
       (l: any) => l.fragment?.name === "ElectionCreated"
@@ -166,7 +185,8 @@ export const ElectionService = {
 
   async registerVoters(address: string, voters: string[]): Promise<string> {
     const contract = await this.writeContract(address);
-    const tx = await contract.registerVoters(voters);
+    const overrides = await getGasOverrides();
+    const tx = await contract.registerVoters(voters, overrides);
     const receipt = await tx.wait();
     return receipt.hash;
   },
@@ -180,21 +200,24 @@ export const ElectionService = {
 
   async activate(address: string): Promise<string> {
     const contract = await this.writeContract(address);
-    const tx = await contract.activate();
+    const overrides = await getGasOverrides();
+    const tx = await contract.activate(overrides);
     const receipt = await tx.wait();
     return receipt.hash;
   },
 
   async deactivate(address: string): Promise<string> {
     const contract = await this.writeContract(address);
-    const tx = await contract.deactivate();
+    const overrides = await getGasOverrides();
+    const tx = await contract.deactivate(overrides);
     const receipt = await tx.wait();
     return receipt.hash;
   },
 
   async vote(address: string, candidateId: number): Promise<string> {
     const contract = await this.writeContract(address);
-    const tx = await contract.vote(candidateId);
+    const overrides = await getGasOverrides();
+    const tx = await contract.vote(candidateId, overrides);
     const receipt = await tx.wait();
     return receipt.hash;
   },
