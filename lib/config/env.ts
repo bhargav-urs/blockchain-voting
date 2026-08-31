@@ -2,9 +2,11 @@
 
 // Public Polygon Amoy RPC endpoints, in preference order. Reads try each in turn,
 // so one provider going down no longer takes the whole app with it.
+// drpc leads because it is the only one of these that also serves historical logs;
+// the rest prune, which matters for the on-chain vote log.
 const FALLBACK_RPC_URLS = [
-  "https://polygon-amoy-bor-rpc.publicnode.com",
   "https://polygon-amoy.drpc.org",
+  "https://polygon-amoy-bor-rpc.publicnode.com",
   "https://api.zan.top/polygon-amoy",
   "https://polygon-amoy.gateway.tenderly.co",
 ];

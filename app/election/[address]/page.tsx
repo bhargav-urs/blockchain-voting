@@ -10,7 +10,6 @@ import {
   CandidateResult,
   VoterStatus,
   MyVote,
-  getReadProvider,
 } from "@/lib/services/blockchain";
 import { appConfig } from "@/lib/config/env";
 import { useWallet } from "@/lib/hooks/useWallet";
@@ -43,6 +42,7 @@ export default function ElectionPage() {
   const [shareUrl, setShareUrl]           = useState("");
   const [txLogs, setTxLogs]               = useState<{ hash: string; ts: number; block: number }[]>([]);
   const [logsLoading, setLogsLoading]     = useState(false);
+  const [logsError, setLogsError]         = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -84,29 +84,21 @@ export default function ElectionPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  // Fetch VoteCast event log (public on-chain, no voter identity revealed in UI)
+  // Fetch VoteCast event log (public on-chain, no voter identity revealed in UI).
+  // Needs the election window so the service can bound the log scan — public RPCs
+  // reject a query over all of history.
   const fetchTxLogs = useCallback(async () => {
-    if (!address) return;
+    if (!address || !info) return;
     setLogsLoading(true);
+    setLogsError(null);
     try {
-      const { ethers } = await import("ethers");
-      const { electionAbi } = await import("@/lib/abi/electionAbi");
-      const provider = await getReadProvider();
-      const contract = new ethers.Contract(address, electionAbi, provider);
-      const filter = contract.filters.VoteCast();
-      const events = await contract.queryFilter(filter);
-      const logs = await Promise.all(events.map(async (e: any) => {
-        const block = await provider.getBlock(e.blockNumber);
-        return {
-          hash:  e.transactionHash,
-          ts:    block ? Number(block.timestamp) : 0,
-          block: e.blockNumber,
-        };
-      }));
-      setTxLogs(logs.sort((a, b) => a.ts - b.ts));
-    } catch { /* silently fail */ }
-    finally { setLogsLoading(false); }
-  }, [address]);
+      setTxLogs(await ElectionService.getVoteLog(address, info.createdAt, info.endTime));
+    } catch (e: any) {
+      setLogsError(e.shortMessage ?? e.message ?? "Could not read the transaction log.");
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [address, info?.createdAt, info?.endTime]);
 
   useEffect(() => { fetchTxLogs(); }, [fetchTxLogs]);
 
@@ -518,6 +510,8 @@ export default function ElectionPage() {
 
             {logsLoading ? (
               <p className="text-faint text-xs">Loading transactions…</p>
+            ) : logsError ? (
+              <p className="text-muted text-sm">Could not read the transaction log: {logsError}</p>
             ) : txLogs.length === 0 ? (
               <p className="text-muted text-sm">No transactions yet. Votes will appear here once cast.</p>
             ) : (

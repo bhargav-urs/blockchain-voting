@@ -73,6 +73,7 @@ function hostOf(url: string): string {
 // Endpoints that have already failed this session, so we stop re-probing them.
 const deadEndpoints = new Set<string>();
 let readProvider: Promise<ethers.JsonRpcProvider> | null = null;
+let readProviderUrl = "";
 
 async function resolveReadProvider(): Promise<ethers.JsonRpcProvider> {
   let candidates = appConfig.rpcUrls.filter((u) => !deadEndpoints.has(u));
@@ -87,6 +88,7 @@ async function resolveReadProvider(): Promise<ethers.JsonRpcProvider> {
     const provider = makeReadProvider(url);
     try {
       await withTimeout(provider.getBlockNumber(), PROBE_TIMEOUT_MS);
+      readProviderUrl = url;
       return provider;
     } catch (e: any) {
       provider.destroy();
@@ -114,6 +116,7 @@ export async function getReadProvider(): Promise<ethers.JsonRpcProvider> {
 async function dropReadProvider(): Promise<void> {
   const current = readProvider;
   readProvider = null;
+  readProviderUrl = "";
   try { (await current)?.destroy(); } catch { /* already gone */ }
 }
 
@@ -218,6 +221,82 @@ export const FactoryService = {
   },
 };
 
+// Public RPCs cap eth_getLogs, so an unbounded queryFilter over all of history is
+// rejected outright. We bracket the election's own window and walk it in chunks.
+const LOG_CHUNK_SIZE = 9_000;
+const AMOY_BLOCK_TIME_SECONDS = 2.1;
+// A scan spans many sequential requests, so it needs a ceiling of its own — without one
+// a node that accepts the range but never answers hangs the panel indefinitely.
+const LOG_SCAN_TIMEOUT_MS = 25_000;
+
+// Most free endpoints also prune old blocks, answering a historical getLogs with
+// "history has been pruned" rather than a transport failure. That reads as an empty
+// vote log unless we recognise it and move to a node that kept the history.
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isHistoryUnavailableError(e: any): boolean {
+  const msg = String(e?.error?.message ?? e?.shortMessage ?? e?.message ?? "").toLowerCase();
+  return msg.includes("pruned")
+    || msg.includes("history")
+    || msg.includes("block range")
+    || msg.includes("query returned more than");
+}
+
+export interface VoteLogEntry {
+  hash: string;
+  ts: number;
+  block: number;
+}
+
+// Walks [fromBlock, toBlock] in chunks and returns the election's VoteCast entries.
+async function scanVoteLog(
+  provider: ethers.JsonRpcProvider,
+  address: string,
+  fromBlock: number,
+  toBlock: number,
+): Promise<VoteLogEntry[]> {
+  const contract = new ethers.Contract(address, electionAbi, provider);
+  const filter = contract.filters.VoteCast();
+  const events: any[] = [];
+  for (let start = fromBlock; start <= toBlock; start += LOG_CHUNK_SIZE) {
+    const end = Math.min(start + LOG_CHUNK_SIZE - 1, toBlock);
+    events.push(...(await contract.queryFilter(filter, start, end)));
+  }
+
+  // One getBlock per distinct block rather than per event.
+  const timestamps = new Map<number, number>();
+  await Promise.all(
+    Array.from(new Set(events.map((e) => e.blockNumber))).map(async (bn) => {
+      const block = await provider.getBlock(bn);
+      if (block) timestamps.set(bn, Number(block.timestamp));
+    })
+  );
+
+  return events
+    .map((e) => ({ hash: e.transactionHash, ts: timestamps.get(e.blockNumber) ?? 0, block: e.blockNumber }))
+    .sort((a, b) => a.ts - b.ts);
+}
+
+// Binary-searches for the first block at or after `targetTs`.
+async function findBlockByTimestamp(
+  provider: ethers.JsonRpcProvider,
+  targetTs: number,
+  latest: number,
+): Promise<number> {
+  let lo = 1;
+  let hi = latest;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const block = await provider.getBlock(mid);
+    if (!block) { lo = mid + 1; continue; }
+    if (block.timestamp < targetTs) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 // ─────────────────────────── Election Service ─────────────────────────────
 
 export const ElectionService = {
@@ -266,6 +345,60 @@ export const ElectionService = {
       const [registered, voted, timestamp] = await (await this.readContract(address)).getVoterStatus(voter);
       return { registered, voted, timestamp: Number(timestamp) };
     });
+  },
+
+  // Every vote is a public VoteCast event. We surface the transaction, block and time
+  // only — candidateId stays out of the returned shape so the UI can't leak who voted
+  // for whom.
+  async getVoteLog(address: string, fromTs: number, toTs: number): Promise<VoteLogEntry[]> {
+    const provider = await getReadProvider();
+    const latest = await provider.getBlockNumber();
+
+    const fromBlock = await withTimeout(
+      findBlockByTimestamp(provider, fromTs, latest),
+      LOG_SCAN_TIMEOUT_MS,
+    );
+    // Estimating the upper bound from the block time saves a second binary search;
+    // overshooting is harmless because the range is clamped to the chain head.
+    const spanBlocks = Math.ceil(Math.max(0, toTs - fromTs) / AMOY_BLOCK_TIME_SECONDS * 1.2);
+    const toBlock = Math.min(latest, fromBlock + spanBlocks + LOG_CHUNK_SIZE);
+
+    // Whichever node is serving ordinary calls may still have pruned this range, so the
+    // scan walks the endpoint list itself and keeps the first node that can answer.
+    const failures: string[] = [];
+    // The node already serving ordinary calls goes first; the rest are the fallback order.
+    const candidates = Array.from(new Set([readProviderUrl, ...appConfig.rpcUrls].filter(Boolean)));
+    for (const url of candidates) {
+      const scanProvider = url === readProviderUrl ? provider : makeReadProvider(url);
+      try {
+        // A node can answer the range and still hiccup, so a transient failure is worth
+        // one retry before we give up on it and lose an endpoint that has the history.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            return await withTimeout(
+              scanVoteLog(scanProvider, address, fromBlock, toBlock),
+              LOG_SCAN_TIMEOUT_MS,
+            );
+          } catch (e: any) {
+            if (attempt === 0 && isRpcTransportError(e) && !isHistoryUnavailableError(e)) {
+              await delay(750);
+              continue;
+            }
+            throw e;
+          }
+        }
+      } catch (e: any) {
+        failures.push(hostOf(url));
+        if (!isHistoryUnavailableError(e) && !isRpcTransportError(e)) throw e;
+      } finally {
+        if (scanProvider !== provider) scanProvider.destroy();
+      }
+    }
+
+    throw new Error(
+      `No available RPC node still holds the logs for this election (tried ${failures.join(", ")}). ` +
+      `Free endpoints prune old blocks — set NEXT_PUBLIC_RPC_URL to an archive node to see the full history.`
+    );
   },
 
   async getMyVote(address: string): Promise<MyVote> {
