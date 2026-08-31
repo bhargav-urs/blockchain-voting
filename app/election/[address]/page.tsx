@@ -10,6 +10,7 @@ import {
   CandidateResult,
   VoterStatus,
   MyVote,
+  getReadProvider,
 } from "@/lib/services/blockchain";
 import { appConfig } from "@/lib/config/env";
 import { useWallet } from "@/lib/hooks/useWallet";
@@ -90,7 +91,7 @@ export default function ElectionPage() {
     try {
       const { ethers } = await import("ethers");
       const { electionAbi } = await import("@/lib/abi/electionAbi");
-      const provider = new ethers.JsonRpcProvider(appConfig.rpcUrl);
+      const provider = await getReadProvider();
       const contract = new ethers.Contract(address, electionAbi, provider);
       const filter = contract.filters.VoteCast();
       const events = await contract.queryFilter(filter);

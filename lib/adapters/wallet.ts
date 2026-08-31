@@ -63,7 +63,7 @@ export class WalletAdapter {
         chainId: appConfig.chainHex,
         chainName: appConfig.chainName,
         nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-        rpcUrls: [appConfig.rpcUrl],
+        rpcUrls: appConfig.rpcUrls,
         blockExplorerUrls: appConfig.explorerUrl ? [appConfig.explorerUrl] : [],
       }],
     });

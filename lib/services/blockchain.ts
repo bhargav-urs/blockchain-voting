@@ -1,5 +1,5 @@
 // lib/services/blockchain.ts
-import { ethers, TransactionReceipt } from "ethers";
+import { ethers, Network, TransactionReceipt } from "ethers";
 import { appConfig } from "@/lib/config/env";
 import { factoryAbi } from "@/lib/abi/factoryAbi";
 import { electionAbi } from "@/lib/abi/electionAbi";
@@ -50,8 +50,91 @@ export interface MyVote {
 
 // ─────────────────────────── Providers ────────────────────────────────────
 
-function getReadProvider(): ethers.JsonRpcProvider {
-  return new ethers.JsonRpcProvider(appConfig.rpcUrl);
+const PROBE_TIMEOUT_MS = 6_000;
+
+function makeReadProvider(url: string): ethers.JsonRpcProvider {
+  // Pinning the network skips the chainId round-trip every provider otherwise makes,
+  // and batchMaxCount:1 keeps us compatible with public nodes that reject JSON-RPC batches.
+  const network = Network.from(appConfig.chainId);
+  return new ethers.JsonRpcProvider(url, network, { staticNetwork: network, batchMaxCount: 1 });
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
+// Endpoints that have already failed this session, so we stop re-probing them.
+const deadEndpoints = new Set<string>();
+let readProvider: Promise<ethers.JsonRpcProvider> | null = null;
+
+async function resolveReadProvider(): Promise<ethers.JsonRpcProvider> {
+  let candidates = appConfig.rpcUrls.filter((u) => !deadEndpoints.has(u));
+  if (!candidates.length) {
+    // Everything is marked dead — give them all another chance rather than giving up.
+    deadEndpoints.clear();
+    candidates = appConfig.rpcUrls;
+  }
+
+  const failures: string[] = [];
+  for (const url of candidates) {
+    const provider = makeReadProvider(url);
+    try {
+      await withTimeout(provider.getBlockNumber(), PROBE_TIMEOUT_MS);
+      return provider;
+    } catch (e: any) {
+      provider.destroy();
+      deadEndpoints.add(url);
+      failures.push(`${hostOf(url)} (${e?.shortMessage ?? e?.message ?? "unreachable"})`);
+    }
+  }
+
+  throw new Error(
+    `Could not reach any ${appConfig.chainName} RPC endpoint. Tried: ${failures.join(", ")}. ` +
+    `Check your connection, or set NEXT_PUBLIC_RPC_URL to a working node.`
+  );
+}
+
+export async function getReadProvider(): Promise<ethers.JsonRpcProvider> {
+  if (!readProvider) {
+    readProvider = resolveReadProvider().catch((e) => {
+      readProvider = null; // never cache a total failure — let the next call retry
+      throw e;
+    });
+  }
+  return readProvider;
+}
+
+async function dropReadProvider(): Promise<void> {
+  const current = readProvider;
+  readProvider = null;
+  try { (await current)?.destroy(); } catch { /* already gone */ }
+}
+
+// An RPC node that dies mid-session surfaces as a transport error, not a contract revert.
+function isRpcTransportError(e: any): boolean {
+  if (!e) return false;
+  if (["NETWORK_ERROR", "SERVER_ERROR", "TIMEOUT"].includes(e.code)) return true;
+  const msg = String(e.shortMessage ?? e.message ?? "").toLowerCase();
+  return msg.includes("failed to fetch") || msg.includes("could not detect network") || msg.includes("timed out");
+}
+
+// Wraps every read so a node going down rotates us to the next endpoint instead of
+// surfacing a bare "Failed to fetch" to the user.
+async function readWithFailover<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!isRpcTransportError(e)) throw e;
+    await dropReadProvider();
+    return fn();
+  }
 }
 
 function getWriteProvider(): ethers.BrowserProvider {
@@ -87,9 +170,9 @@ async function getGasOverrides(): Promise<{ gasPrice?: bigint; maxFeePerGas?: bi
 // ─────────────────────────── Factory Service ──────────────────────────────
 
 export const FactoryService = {
-  readContract() {
+  async readContract() {
     if (!appConfig.factoryAddress) throw new Error("Factory address not configured. Did you deploy the contract?");
-    return new ethers.Contract(appConfig.factoryAddress, factoryAbi, getReadProvider());
+    return new ethers.Contract(appConfig.factoryAddress, factoryAbi, await getReadProvider());
   },
 
   async writeContract() {
@@ -99,19 +182,21 @@ export const FactoryService = {
   },
 
   async getOwner(): Promise<string> {
-    return (await this.readContract()).owner();
+    return readWithFailover(async () => (await this.readContract()).owner());
   },
 
   async getAllElections(): Promise<ElectionRecord[]> {
-    const raw: any[] = await (await this.readContract()).getAllElections();
-    return raw.map((r) => ({
-      address:     r.electionAddress,
-      title:       r.title,
-      description: r.description,
-      createdAt:   Number(r.createdAt),
-      startTime:   Number(r.startTime),
-      endTime:     Number(r.endTime),
-    }));
+    return readWithFailover(async () => {
+      const raw: any[] = await (await this.readContract()).getAllElections();
+      return raw.map((r) => ({
+        address:     r.electionAddress,
+        title:       r.title,
+        description: r.description,
+        createdAt:   Number(r.createdAt),
+        startTime:   Number(r.startTime),
+        endTime:     Number(r.endTime),
+      }));
+    });
   },
 
   async createElection(
@@ -136,8 +221,8 @@ export const FactoryService = {
 // ─────────────────────────── Election Service ─────────────────────────────
 
 export const ElectionService = {
-  readContract(address: string) {
-    return new ethers.Contract(address, electionAbi, getReadProvider());
+  async readContract(address: string) {
+    return new ethers.Contract(address, electionAbi, await getReadProvider());
   },
 
   async writeContract(address: string) {
@@ -146,35 +231,41 @@ export const ElectionService = {
   },
 
   async getInfo(address: string): Promise<ElectionInfo> {
-    const raw = await this.readContract(address).getElectionInfo();
-    return {
-      address,
-      title:          raw[0],
-      description:    raw[1],
-      isActive:       raw[2],
-      isVotingOpen:   raw[3],
-      startTime:      Number(raw[4]),
-      endTime:        Number(raw[5]),
-      createdAt:      Number(raw[6]),
-      totalVotes:     Number(raw[7]),
-      candidateCount: Number(raw[8]),
-    };
+    return readWithFailover(async () => {
+      const raw = await (await this.readContract(address)).getElectionInfo();
+      return {
+        address,
+        title:          raw[0],
+        description:    raw[1],
+        isActive:       raw[2],
+        isVotingOpen:   raw[3],
+        startTime:      Number(raw[4]),
+        endTime:        Number(raw[5]),
+        createdAt:      Number(raw[6]),
+        totalVotes:     Number(raw[7]),
+        candidateCount: Number(raw[8]),
+      };
+    });
   },
 
   async getResults(address: string): Promise<CandidateResult[]> {
-    const [names, counts]: [string[], bigint[]] = await this.readContract(address).getResults();
-    const total = counts.reduce((a, b) => a + b, BigInt(0));
-    return names.map((name, i) => ({
-      id:         i,
-      name,
-      voteCount:  Number(counts[i]),
-      percentage: total > BigInt(0) ? Math.round((Number(counts[i]) / Number(total)) * 100) : 0,
-    }));
+    return readWithFailover(async () => {
+      const [names, counts]: [string[], bigint[]] = await (await this.readContract(address)).getResults();
+      const total = counts.reduce((a, b) => a + b, BigInt(0));
+      return names.map((name, i) => ({
+        id:         i,
+        name,
+        voteCount:  Number(counts[i]),
+        percentage: total > BigInt(0) ? Math.round((Number(counts[i]) / Number(total)) * 100) : 0,
+      }));
+    });
   },
 
   async getVoterStatus(address: string, voter: string): Promise<VoterStatus> {
-    const [registered, voted, timestamp] = await this.readContract(address).getVoterStatus(voter);
-    return { registered, voted, timestamp: Number(timestamp) };
+    return readWithFailover(async () => {
+      const [registered, voted, timestamp] = await (await this.readContract(address)).getVoterStatus(voter);
+      return { registered, voted, timestamp: Number(timestamp) };
+    });
   },
 
   async getMyVote(address: string): Promise<MyVote> {

@@ -358,7 +358,7 @@ The frontend reads blockchain state via a public RPC endpoint. Write operations 
 | Block confirmation time on Polygon Amoy is approximately 2–4 seconds. |
 | The admin retains custody of their private key; losing it means losing admin access. |
 | Polygon Amoy is a testnet — data is periodically reset by the Polygon team (unlikely but possible). |
-| The RPC URL `https://rpc-amoy.polygon.technology` is public and rate-limited; for production use a paid RPC provider (Alchemy, QuickNode). |
+| The RPC URL `https://polygon-amoy-bor-rpc.publicnode.com` is public and rate-limited; for production use a paid RPC provider (Alchemy, QuickNode). |
 
 ---
 

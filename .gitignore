@@ -33,3 +33,6 @@ coverage/
 .vercel/
 .vercel
 .env*.local
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo

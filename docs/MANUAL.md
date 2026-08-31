@@ -164,7 +164,7 @@ cp .env.example .env.local
 Open `.env.local` in a text editor and set:
 
 ```bash
-NEXT_PUBLIC_RPC_URL=https://rpc-amoy.polygon.technology/
+NEXT_PUBLIC_RPC_URL=https://polygon-amoy-bor-rpc.publicnode.com
 NEXT_PUBLIC_CHAIN_ID=80002
 NEXT_PUBLIC_CHAIN_HEX=0x13882
 NEXT_PUBLIC_CHAIN_NAME=Polygon Amoy
@@ -201,7 +201,7 @@ MetaMask may prompt you automatically. If not:
 1. Open MetaMask → Networks → Add network manually
 2. Fill in:
    - **Network name:** Polygon Amoy
-   - **RPC URL:** `https://rpc-amoy.polygon.technology/`
+   - **RPC URL:** `https://polygon-amoy-bor-rpc.publicnode.com`
    - **Chain ID:** `80002`
    - **Currency symbol:** MATIC
    - **Block explorer:** `https://amoy.polygonscan.com`
@@ -303,7 +303,7 @@ The deployed app needs the environment variables. Set them in the Vercel dashboa
 
 | Name | Value |
 |---|---|
-| `NEXT_PUBLIC_RPC_URL` | `https://rpc-amoy.polygon.technology/` |
+| `NEXT_PUBLIC_RPC_URL` | `https://polygon-amoy-bor-rpc.publicnode.com` |
 | `NEXT_PUBLIC_CHAIN_ID` | `80002` |
 | `NEXT_PUBLIC_CHAIN_HEX` | `0x13882` |
 | `NEXT_PUBLIC_CHAIN_NAME` | `Polygon Amoy` |

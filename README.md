@@ -156,8 +156,18 @@ The test suite covers:
 
 | Network | Chain ID | RPC | Explorer |
 |---|---|---|---|
-| Polygon Amoy (testnet) | 80002 | https://rpc-amoy.polygon.technology | https://amoy.polygonscan.com |
+| Polygon Amoy (testnet) | 80002 | https://polygon-amoy-bor-rpc.publicnode.com | https://amoy.polygonscan.com |
 | Hardhat localhost | 31337 | http://127.0.0.1:8545 | — |
+
+Reads don't depend on any single node. `lib/config/env.ts` holds an ordered list of
+public Amoy endpoints and `lib/services/blockchain.ts` probes them in turn, caching the
+first that answers and rotating to the next if it later goes down. Set
+`NEXT_PUBLIC_RPC_URL` (or `NEXT_PUBLIC_RPC_URLS`, comma-separated) to put your own node
+at the front of that list.
+
+> Polygon retired `rpc-amoy.polygon.technology` and its DNS no longer resolves, which
+> surfaced in the UI as a bare "Failed to fetch". That host is filtered out explicitly,
+> so a stale value left in a deployment environment can't bring the app down again.
 
 ---
 

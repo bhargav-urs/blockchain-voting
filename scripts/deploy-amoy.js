@@ -36,7 +36,7 @@ async function main() {
   console.log("   Explorer: https://amoy.polygonscan.com/address/" + factoryAddress);
 
   const envPath = path.join(__dirname, "../.env.local");
-  const envContent = `NEXT_PUBLIC_RPC_URL=https://rpc-amoy.polygon.technology/
+  const envContent = `NEXT_PUBLIC_RPC_URL=https://polygon-amoy-bor-rpc.publicnode.com
 NEXT_PUBLIC_CHAIN_ID=80002
 NEXT_PUBLIC_CHAIN_HEX=0x13882
 NEXT_PUBLIC_CHAIN_NAME=Polygon Amoy
