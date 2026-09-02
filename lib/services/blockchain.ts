@@ -227,13 +227,41 @@ const LOG_CHUNK_SIZE = 9_000;
 const AMOY_BLOCK_TIME_SECONDS = 2.1;
 // A scan spans many sequential requests, so it needs a ceiling of its own — without one
 // a node that accepts the range but never answers hangs the panel indefinitely.
-const LOG_SCAN_TIMEOUT_MS = 25_000;
+const LOG_SCAN_TIMEOUT_MS = 20_000;
+// Rotating four endpoints with a retry each could otherwise spin for minutes; past
+// this the panel reports honestly instead of leaving a spinner up.
+const LOG_TOTAL_BUDGET_MS = 45_000;
+
+// An election's start block never changes, so resolving it is a one-time cost per
+// browser. Failures here are never fatal — storage can be unavailable or full.
+function cachedStartBlock(address: string): number | null {
+  try {
+    const raw = window.localStorage.getItem(`cv:startBlock:${appConfig.chainId}:${address}`);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch { return null; }
+}
+
+function rememberStartBlock(address: string, block: number): void {
+  try {
+    window.localStorage.setItem(`cv:startBlock:${appConfig.chainId}:${address}`, String(block));
+  } catch { /* storage unavailable — recompute next time */ }
+}
 
 // Most free endpoints also prune old blocks, answering a historical getLogs with
 // "history has been pruned" rather than a transport failure. That reads as an empty
 // vote log unless we recognise it and move to a node that kept the history.
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Free endpoints throttle aggressively. This is a different failure from pruning and
+// deserves a different explanation — telling someone to buy an archive node when they
+// were merely rate-limited sends them down the wrong path.
+function isRateLimitError(e: any): boolean {
+  const status = String(e?.info?.responseStatus ?? e?.status ?? "");
+  const msg = String(e?.error?.message ?? e?.shortMessage ?? e?.message ?? "");
+  return /\b429\b/.test(status) || /\b429\b|rate.?limit|too many requests/i.test(msg);
 }
 
 function isHistoryUnavailableError(e: any): boolean {
@@ -279,22 +307,55 @@ async function scanVoteLog(
     .sort((a, b) => a.ts - b.ts);
 }
 
-// Binary-searches for the first block at or after `targetTs`.
+// Locates a block at or before `targetTs`. A binary search over ~46M blocks costs
+// ~25 sequential round-trips, which is enough on its own to earn a 429 from a free
+// endpoint. Block time is near-constant, so interpolating between two known samples
+// converges in about four requests instead, and we only need a safe lower bound —
+// the caller widens the range anyway.
+const BLOCK_SEARCH_TOLERANCE_SECONDS = 120;
+const BLOCK_SEARCH_MAX_STEPS = 6;
+const BLOCK_SEARCH_SAFETY_BLOCKS = 2_500;
+
 async function findBlockByTimestamp(
   provider: ethers.JsonRpcProvider,
   targetTs: number,
   latest: number,
 ): Promise<number> {
-  let lo = 1;
-  let hi = latest;
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    const block = await provider.getBlock(mid);
-    if (!block) { lo = mid + 1; continue; }
-    if (block.timestamp < targetTs) lo = mid + 1;
-    else hi = mid;
+  const head = await provider.getBlock(latest);
+  if (!head || head.timestamp <= targetTs) return Math.max(1, latest);
+
+  let refBlock = latest;
+  let refTs = Number(head.timestamp);
+  let secondsPerBlock = AMOY_BLOCK_TIME_SECONDS;
+  let guess = Math.max(1, latest - Math.round((refTs - targetTs) / secondsPerBlock));
+
+  for (let step = 0; step < BLOCK_SEARCH_MAX_STEPS; step++) {
+    const block = await provider.getBlock(guess);
+    if (!block) break;
+
+    const ts = Number(block.timestamp);
+    const drift = ts - targetTs;
+    if (Math.abs(drift) <= BLOCK_SEARCH_TOLERANCE_SECONDS) {
+      refBlock = guess;
+      break;
+    }
+
+    // Recalibrate the rate from the two real samples before stepping again.
+    if (guess !== refBlock) {
+      const rate = (refTs - ts) / (refBlock - guess);
+      if (Number.isFinite(rate) && rate > 0) secondsPerBlock = rate;
+    }
+    refBlock = guess;
+    refTs = ts;
+
+    const next = Math.max(1, Math.min(latest, guess - Math.round(drift / secondsPerBlock)));
+    if (next === guess) break;
+    guess = next;
   }
-  return lo;
+
+  // Step back far enough that any residual drift still leaves us before the target.
+  const margin = Math.ceil(BLOCK_SEARCH_TOLERANCE_SECONDS / AMOY_BLOCK_TIME_SECONDS) + BLOCK_SEARCH_SAFETY_BLOCKS;
+  return Math.max(1, Math.min(refBlock, guess) - margin);
 }
 
 // ─────────────────────────── Election Service ─────────────────────────────
@@ -354,10 +415,12 @@ export const ElectionService = {
     const provider = await getReadProvider();
     const latest = await provider.getBlockNumber();
 
-    const fromBlock = await withTimeout(
+    const cached = cachedStartBlock(address);
+    const fromBlock = cached ?? await withTimeout(
       findBlockByTimestamp(provider, fromTs, latest),
       LOG_SCAN_TIMEOUT_MS,
     );
+    if (cached === null) rememberStartBlock(address, fromBlock);
     // Estimating the upper bound from the block time saves a second binary search;
     // overshooting is harmless because the range is clamped to the chain head.
     const spanBlocks = Math.ceil(Math.max(0, toTs - fromTs) / AMOY_BLOCK_TIME_SECONDS * 1.2);
@@ -366,9 +429,11 @@ export const ElectionService = {
     // Whichever node is serving ordinary calls may still have pruned this range, so the
     // scan walks the endpoint list itself and keeps the first node that can answer.
     const failures: string[] = [];
+    const deadline = Date.now() + LOG_TOTAL_BUDGET_MS;
     // The node already serving ordinary calls goes first; the rest are the fallback order.
     const candidates = Array.from(new Set([readProviderUrl, ...appConfig.rpcUrls].filter(Boolean)));
     for (const url of candidates) {
+      if (Date.now() > deadline) break;
       const scanProvider = url === readProviderUrl ? provider : makeReadProvider(url);
       try {
         // A node can answer the range and still hiccup, so a transient failure is worth
@@ -380,7 +445,7 @@ export const ElectionService = {
               LOG_SCAN_TIMEOUT_MS,
             );
           } catch (e: any) {
-            if (attempt === 0 && isRpcTransportError(e) && !isHistoryUnavailableError(e)) {
+            if (attempt === 0 && Date.now() < deadline && isRpcTransportError(e) && !isHistoryUnavailableError(e)) {
               await delay(750);
               continue;
             }
@@ -388,16 +453,26 @@ export const ElectionService = {
           }
         }
       } catch (e: any) {
-        failures.push(hostOf(url));
-        if (!isHistoryUnavailableError(e) && !isRpcTransportError(e)) throw e;
+        const reason = isRateLimitError(e) ? "rate-limited"
+          : isHistoryUnavailableError(e) ? "history pruned"
+          : "unreachable";
+        failures.push(`${hostOf(url)} (${reason})`);
+        if (!isRateLimitError(e) && !isHistoryUnavailableError(e) && !isRpcTransportError(e)) throw e;
       } finally {
         if (scanProvider !== provider) scanProvider.destroy();
       }
     }
 
+    const throttled = failures.some((f) => f.includes("rate-limited"));
+    const pruned = failures.some((f) => f.includes("history pruned"));
+    const advice = throttled && !pruned
+      ? "The public endpoints are throttling requests right now — try again shortly."
+      : throttled
+        ? "The public endpoints are either throttling requests or no longer keep blocks this old."
+        : "Free endpoints prune old blocks.";
     throw new Error(
-      `No available RPC node still holds the logs for this election (tried ${failures.join(", ")}). ` +
-      `Free endpoints prune old blocks — set NEXT_PUBLIC_RPC_URL to an archive node to see the full history.`
+      `Could not read this election's logs from any RPC endpoint (tried ${failures.join(", ")}). ` +
+      `${advice} Setting NEXT_PUBLIC_RPC_URL to a dedicated archive node makes this reliable.`
     );
   },
 
