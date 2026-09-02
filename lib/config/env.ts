@@ -2,13 +2,19 @@
 
 // Public Polygon Amoy RPC endpoints, in preference order. Reads try each in turn,
 // so one provider going down no longer takes the whole app with it.
-// drpc leads because it is the only one of these that also serves historical logs;
-// the rest prune, which matters for the on-chain vote log.
+// Ordered by what each endpoint can actually serve, measured against this app:
+//  - tenderly  handles ordinary reads AND wide eth_getLogs ranges, so it leads
+//  - drpc      serves wide ranges too but throttles aggressively under load
+//  - publicnode is fast for ordinary reads but prunes historical logs
+//  - zan       applies compute-unit limits that exclude eth_getLogs
+// Note that an Alchemy free-tier key set via NEXT_PUBLIC_RPC_URL takes precedence for
+// ordinary reads but caps eth_getLogs at 10 blocks, so vote-log scans rotate past it
+// to whichever endpoint here can serve the range.
 const FALLBACK_RPC_URLS = [
+  "https://polygon-amoy.gateway.tenderly.co",
   "https://polygon-amoy.drpc.org",
   "https://polygon-amoy-bor-rpc.publicnode.com",
   "https://api.zan.top/polygon-amoy",
-  "https://polygon-amoy.gateway.tenderly.co",
 ];
 
 // polygon.technology retired its public Amoy endpoint and the hostname no longer
