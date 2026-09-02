@@ -47,9 +47,30 @@ NEXT_PUBLIC_ADMIN_ADDRESS=${deployer.address}
   fs.writeFileSync(envPath, envContent);
   console.log("\n📝 .env.local updated.");
 
+  // Verifying straight after deployment is the only moment the source is guaranteed to
+  // match the deployed bytecode exactly — any later edit, even to a comment, changes the
+  // metadata hash and breaks Etherscan's match.
+  if (process.env.ETHERSCAN_API_KEY) {
+    console.log("\n🔎 Waiting for the explorer to index the deployment…");
+    await new Promise((r) => setTimeout(r, 30_000));
+    try {
+      await hre.run("verify:verify", { address: factoryAddress, constructorArguments: [] });
+      console.log("✅ ElectionFactory verified on PolygonScan.");
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      console.warn(/already verified/i.test(msg)
+        ? "ℹ️  Already verified."
+        : `⚠️  Verification failed: ${msg.split("\n")[0]}\n   Retry later with: npm run verify:amoy`);
+    }
+  } else {
+    console.log("\nℹ️  ETHERSCAN_API_KEY not set — skipping verification.");
+    console.log("   Set it and run: npm run verify:amoy");
+  }
+
   console.log("\n🚀 Next steps:");
   console.log("   1. Copy NEXT_PUBLIC_FACTORY_ADDRESS to Vercel env vars");
   console.log("   2. Redeploy with: npx vercel --prod");
+  console.log("   3. Verify any elections you create: npm run verify:amoy");
 }
 
 main().catch((err) => {
