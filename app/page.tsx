@@ -22,7 +22,7 @@ const FEATURES = [
   {
     icon: "🔍",
     title: "Public Audit Trail",
-    desc: "Anyone can verify results directly on PolygonScan. Aggregate vote counts are fully transparent while individual choices stay private.",
+    desc: "Every vote is a public transaction on PolygonScan, so anyone can recount the tally independently without trusting this site.",
   },
   {
     icon: "🔑",
@@ -32,14 +32,14 @@ const FEATURES = [
   {
     icon: "🆓",
     title: "Completely Free",
-    desc: "Deployed on Polygon Amoy testnet using free test MATIC. No real money required — perfect for classroom and organisational use.",
+    desc: "Deployed on Polygon Amoy testnet using free test POL. No real money required — perfect for classroom and organisational use.",
   },
 ];
 
 const HOW = [
   { num: "01", title: "Admin Creates Election", desc: "The admin connects their MetaMask wallet, creates an election with candidates, start/end dates, and registers eligible voter wallets." },
   { num: "02", title: "Voters Receive Link", desc: "Registered voters receive a unique election link. They click it, connect their MetaMask wallet to Polygon Amoy, and see the ballot." },
-  { num: "03", title: "Cast Your Vote", desc: "If registered and within the time window, the voter selects a candidate and confirms the transaction in MetaMask. Gas is paid in free test MATIC." },
+  { num: "03", title: "Cast Your Vote", desc: "If registered and within the time window, the voter selects a candidate and confirms the transaction in MetaMask. Gas is paid in free test POL." },
   { num: "04", title: "Verify on Blockchain", desc: "After voting, a transaction hash is shown. Anyone can look it up on PolygonScan to confirm the vote was permanently recorded on chain." },
 ];
 
@@ -109,7 +109,7 @@ export default function HomePage() {
             {[
               { v: "100%", l: "On-Chain" },
               { v: "0", l: "Server Storage" },
-              { v: "Free", l: "Test MATIC" },
+              { v: "Free", l: "Test POL" },
               { v: "∞", l: "Auditability" },
             ].map((s) => (
               <div key={s.l}>
@@ -190,7 +190,7 @@ export default function HomePage() {
         <div className="container">
           <h2 style={{ marginBottom: 12 }}>Ready to run your first election?</h2>
           <p className="text-muted" style={{ marginBottom: 28 }}>
-            Get free test MATIC from the Polygon faucet, deploy the contract, and you're live in minutes.
+            Get free test POL from the Polygon faucet, deploy the contract, and you're live in minutes.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <Link href="/admin" className="btn btn-primary btn-lg">
@@ -202,7 +202,7 @@ export default function HomePage() {
               rel="noopener noreferrer"
               className="btn btn-ghost btn-lg"
             >
-              Get Free Test MATIC ↗
+              Get Free Test POL ↗
             </a>
           </div>
         </div>

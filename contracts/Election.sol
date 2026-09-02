@@ -33,7 +33,7 @@ contract Election {
 
     mapping(address => bool)    public isRegisteredVoter;
     mapping(address => bool)    public hasVoted;
-    mapping(address => uint256) private voterChoice;      // kept private: public stats ≠ individual disclosure
+    mapping(address => uint256) private voterChoice;      // no getter is generated, but storage is still publicly readable
     mapping(address => uint256) public  votedAt;
 
     // ─────────────────────────── Events ────────────────────────────
@@ -153,7 +153,11 @@ contract Election {
 
     /**
      * @notice Cast a single, permanent, immutable vote.
-     * @dev    Emits only candidateId, NOT candidateName – prevents name-based correlation.
+     * @dev    VoteCast emits the voter and the candidateId, both indexed. On a public
+     *         chain this is unavoidable — the choice is also in the calldata and in
+     *         storage — so this contract offers no ballot secrecy. Aggregate tallies are
+     *         trustworthy; individual choices are not hidden. Achieving secrecy would
+     *         require commit–reveal or zero-knowledge proofs.
      */
     function vote(uint256 candidateId) external {
         if (!isVotingOpen())                    revert VotingNotOpen();
@@ -168,7 +172,6 @@ contract Election {
         candidates[candidateId].voteCount += 1;
         totalVotes += 1;
 
-        // Note: voter identity NOT emitted – only candidateId and timestamp
         emit VoteCast(msg.sender, candidateId, block.timestamp);
     }
 
@@ -188,7 +191,7 @@ contract Election {
     }
 
     /**
-     * @notice Return aggregate results (names + vote counts). Privacy-safe.
+     * @notice Return aggregate results (names + vote counts).
      */
     function getResults()
         external

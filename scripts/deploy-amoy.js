@@ -10,10 +10,10 @@ async function main() {
 
   const balance = await hre.ethers.provider.getBalance(deployer.address);
   const balanceEth = hre.ethers.formatEther(balance);
-  console.log("Balance:", balanceEth, "MATIC");
+  console.log("Balance:", balanceEth, "POL");
 
   if (parseFloat(balanceEth) < 0.05) {
-    console.warn("⚠️  Low balance. Get free test MATIC at https://faucet.polygon.technology");
+    console.warn("⚠️  Low balance. Get free test POL at https://faucet.polygon.technology");
   }
 
   console.log("\nDeploying ElectionFactory...");

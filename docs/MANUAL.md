@@ -134,7 +134,7 @@ All tests should pass. You'll see a summary of each test case.
 
 ## 3. Polygon Amoy Testnet Deployment
 
-This is the public, permanently-accessible version. No cost — uses free test MATIC.
+This is the public, permanently-accessible version. No cost — uses free test POL.
 
 ### 3.1 Get your admin wallet's private key
 
@@ -145,12 +145,12 @@ In MetaMask:
 2. Click **Show private key** → enter your MetaMask password
 3. Copy the private key (starts with `0x`)
 
-### 3.2 Get free test MATIC
+### 3.2 Get free test POL
 
 1. Go to the [Polygon Faucet](https://faucet.polygon.technology)
 2. Select **Amoy** network
 3. Paste your wallet address (starts with `0x`)
-4. Click **Submit** — you'll receive 0.5 MATIC (more than enough)
+4. Click **Submit** — you'll receive 0.5 POL (more than enough)
 5. Wait ~30 seconds for the transaction to confirm
 
 You can check your balance at [amoy.polygonscan.com](https://amoy.polygonscan.com)
@@ -203,7 +203,7 @@ MetaMask may prompt you automatically. If not:
    - **Network name:** Polygon Amoy
    - **RPC URL:** `https://polygon-amoy-bor-rpc.publicnode.com`
    - **Chain ID:** `80002`
-   - **Currency symbol:** MATIC
+   - **Currency symbol:** POL
    - **Block explorer:** `https://amoy.polygonscan.com`
 3. Save and switch to Polygon Amoy
 
@@ -389,7 +389,7 @@ Click **⏸ Deactivate** to manually close voting at any time, regardless of the
 3. Create a new wallet (or use existing one)
 4. **Note your wallet address** (0x... at the top) — this is what you give to the admin
 
-### Step 2: Get free test MATIC
+### Step 2: Get free test POL
 
 1. Go to [faucet.polygon.technology](https://faucet.polygon.technology)
 2. Select **Amoy**
@@ -397,7 +397,7 @@ Click **⏸ Deactivate** to manually close voting at any time, regardless of the
 4. Click **Submit**
 5. Wait ~30 seconds
 
-You only need to do this once. The gas fee for voting is tiny (~0.0001 MATIC).
+You only need to do this once. The gas fee for voting is tiny (~0.0001 POL).
 
 ### Step 3: Click the election link
 
@@ -452,7 +452,7 @@ After voting, you'll see a transaction hash. Click it to see your vote on [amoy.
 ### Transaction keeps spinning / fails
 
 - Increase gas fee: in MetaMask transaction popup → click gas fee → select "Fast"
-- Make sure you have MATIC balance (get free test MATIC from the faucet)
+- Make sure you have POL balance (get free test POL from the faucet)
 - If on local: make sure `npm run node` is still running in a terminal
 
 ### "Could not load election" error
@@ -503,7 +503,7 @@ npm run deploy:local
 ### Rotate deployer wallet
 
 1. Create a new MetaMask account
-2. Get test MATIC for it from the faucet
+2. Get test POL for it from the faucet
 3. Update `PRIVATE_KEY` in `.env.local`
 4. Deploy again: `npm run deploy:amoy`
 5. The new wallet becomes the admin

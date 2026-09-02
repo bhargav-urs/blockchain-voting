@@ -16,7 +16,7 @@
 | **Admin-controlled access** | Only the deployer wallet can create elections and register eligible voters |
 | **Start/end scheduling** | Elections have a defined open window; voting outside it is rejected by the contract |
 | **Shareable voter links** | Share a single URL — registered voters click it and vote |
-| **Free testnet** | Polygon Amoy testnet with free test MATIC — no real cost |
+| **Free testnet** | Polygon Amoy testnet with free test POL — no real cost |
 | **100% on-chain** | No backend server, no database — everything lives on the blockchain |
 
 ---
@@ -89,7 +89,7 @@ Open [http://localhost:3000](http://localhost:3000) and connect MetaMask to **Ha
 ### 3. Deploy to Polygon Amoy testnet (public & free)
 
 ```bash
-# Get free test MATIC first:
+# Get free test POL first:
 # https://faucet.polygon.technology (select Amoy)
 
 # Copy and fill in your deployer private key:
@@ -113,10 +113,10 @@ Share your Vercel/Railway deployment URL — it's publicly accessible, free, and
 
 ### `Election.sol`
 - **Immutable core**: once created, candidate list and owner are permanent
-- **Privacy-preserving**: `voterChoice` is a private mapping — no external call can see who voted for whom
+- **No ballot secrecy**: `voterChoice` is `private`, but Solidity `private` only suppresses the generated getter. The `VoteCast` event emits the voter and `candidateId` (both indexed), the choice is in the transaction calldata, and the storage slot is readable via `eth_getStorageAt` — so who voted for whom **is** publicly derivable. Real secrecy needs commit–reveal or zero-knowledge proofs.
 - `getVoterStatus(addr)` returns `(registered, voted, timestamp)` — NOT the candidate chosen
 - `getMyVote()` — voters can only view their OWN choice via this function
-- The `VoteCast` event emits `candidateId` and `timestamp` only — NOT the candidate's name
+- The `VoteCast` event emits `voter`, `candidateId` and `timestamp`; omitting the candidate *name* is cosmetic, since the name is one `getResults()` call away
 - Admin can activate/deactivate; voting also requires `block.timestamp ∈ [startTime, endTime]`
 
 ---
@@ -134,7 +134,7 @@ The test suite covers:
 - Voter registration and removal
 - Voting: success, double-vote prevention, unregistered voter, invalid candidate
 - Time-window enforcement (voting before open, after close)
-- Privacy: `VoteCast` event structure verification
+- `VoteCast` event structure verification (asserts the candidate name is absent — this is a shape check, not a privacy guarantee)
 - Result tallying accuracy
 
 ---

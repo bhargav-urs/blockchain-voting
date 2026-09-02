@@ -510,8 +510,9 @@ export default function ElectionPage() {
               </button>
             </div>
             <p className="text-muted text-sm" style={{ marginBottom: 14 }}>
-              Every vote is a permanent blockchain transaction. Anyone can verify these records
-              — but <strong>who voted for whom is kept private</strong> in this interface.
+              Every vote is a permanent blockchain transaction. This list shows when each vote
+              landed; it does not show choices. Note that the ledger itself is public, so a
+              wallet&rsquo;s choice <strong>can</strong> be read from the chain directly.
             </p>
 
             {logsLoading ? (

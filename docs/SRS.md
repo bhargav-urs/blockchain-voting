@@ -43,7 +43,7 @@ ChainVote enables:
 - Admin creation and management of one or more elections
 - Voter authentication via MetaMask wallet (no passwords, no backend accounts)
 - Immutable, tamper-proof vote casting on the Polygon blockchain
-- Public, privacy-preserving result display (aggregate tallies, not individual choices)
+- Public result display via aggregate tallies (individual choices remain derivable from the chain — see §9)
 - Fully free operation using Polygon Amoy test tokens
 
 ### 1.3 Definitions
@@ -312,7 +312,14 @@ The frontend reads blockchain state via a public RPC endpoint. Write operations 
 | PRV-4 | The frontend MUST NOT display which candidate any specific voter chose. |
 | PRV-5 | `getMyVote()` MAY return the caller's own choice — this is intentional self-disclosure. |
 
-> **Note:** On-chain data is technically accessible to sophisticated analysts who replay transactions. These requirements prevent easy casual disclosure, not determined forensic analysis. For maximum privacy, use zero-knowledge proofs (not in scope for this version).
+> **These are interface requirements, not secrecy guarantees.** This system provides **no ballot
+> secrecy**. `VoteCast` emits the voter address and `candidateId` as indexed parameters, so a single
+> `eth_getLogs` call returns who voted for whom. The choice is also present in the transaction
+> calldata and readable from the `voterChoice` storage slot via `eth_getStorageAt`; Solidity
+> `private` suppresses only the generated getter, never public readability. PRV-1 to PRV-5 keep
+> individual choices out of *this application's* surface — they do not and cannot hide them on a
+> public chain. Genuine secrecy requires commit–reveal or zero-knowledge proofs, which are out of
+> scope for this version.
 
 ---
 
@@ -354,7 +361,7 @@ The frontend reads blockchain state via a public RPC endpoint. Write operations 
 | Constraint/Assumption |
 |---|
 | Users must have MetaMask installed and configured. |
-| Users need free test MATIC from the Polygon faucet to vote (gas fee ≈ 0.0001 MATIC). |
+| Users need free test POL from the Polygon faucet to vote (gas fee ≈ 0.0001 POL). |
 | Block confirmation time on Polygon Amoy is approximately 2–4 seconds. |
 | The admin retains custody of their private key; losing it means losing admin access. |
 | Polygon Amoy is a testnet — data is periodically reset by the Polygon team (unlikely but possible). |
@@ -532,7 +539,7 @@ interface VoterStatus {
 | Unregistered voter blocked | `npm test` — `NotRegistered` revert test passes |
 | Vote after deadline blocked | `npm test` — time window test passes |
 | Results show correct counts | `npm test` — tally test passes |
-| Privacy: voterChoice not exposed | `npm test` — VoteCast event structure test passes |
+| `voterChoice` has no generated getter | `npm test` — VoteCast event structure test passes (shape only, not secrecy) |
 | Frontend loads without errors | `npm run dev` — no console errors |
 | Admin portal requires correct wallet | Manual test: connect non-admin wallet → warning shown |
 | Voter link shares correct URL | Manual test: copy link → opens correct ballot |
@@ -553,7 +560,7 @@ interface VoterStatus {
 | **Factory** | A smart contract that deploys and tracks other contracts |
 | **Gas** | A fee paid to the network for executing transactions (free on testnet) |
 | **Immutable** | Data that cannot be changed or deleted once written to the blockchain |
-| **MATIC** | The native token of Polygon, used to pay gas fees |
+| **POL** | The native token of Polygon, used to pay gas fees (formerly MATIC) |
 | **MetaMask** | A browser wallet used to sign blockchain transactions |
 | **Polygon Amoy** | An EVM-compatible Ethereum testnet operated by the Polygon team |
 | **Private Key** | A secret cryptographic key used to sign transactions — the "password" for a wallet |
