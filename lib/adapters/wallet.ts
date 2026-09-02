@@ -7,6 +7,17 @@ declare global {
   }
 }
 
+// MetaMask reports refusals and conflicts as numeric codes; surfacing them raw
+// leaves the user staring at "User denied transaction signature".
+function walletError(err: any, fallback: string): Error {
+  const code = err?.code ?? err?.data?.originalError?.code;
+  if (code === 4001) return new Error("Request rejected in MetaMask.");
+  if (code === -32002) {
+    return new Error("MetaMask already has a request open — finish or dismiss it in the extension, then try again.");
+  }
+  return new Error(err?.message ?? fallback);
+}
+
 export class WalletAdapter {
   private static instance: WalletAdapter;
 
@@ -20,10 +31,24 @@ export class WalletAdapter {
   }
 
   async connect(): Promise<string> {
-    if (!this.isInstalled()) throw new Error("MetaMask not installed. Please install it from metamask.io");
+    if (!this.isInstalled()) {
+      throw new Error("MetaMask not detected. Install it from metamask.io, then reload this page.");
+    }
+
+    // Authorise the site first. MetaMask refuses wallet_switchEthereumChain and
+    // wallet_addEthereumChain from a site the user has not connected yet, so doing
+    // the network check first made the very first connection fail every time.
+    let accounts: string[];
+    try {
+      accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    } catch (err: any) {
+      throw walletError(err, "Could not connect to MetaMask.");
+    }
+    if (!accounts.length) {
+      throw new Error("MetaMask returned no accounts. Unlock the extension and try again.");
+    }
+
     await this.ensureCorrectNetwork();
-    const accounts: string[] = await window.ethereum.request({ method: "eth_requestAccounts" });
-    if (!accounts.length) throw new Error("No accounts returned from MetaMask.");
     return accounts[0].toLowerCase();
   }
 
@@ -40,18 +65,24 @@ export class WalletAdapter {
   async ensureCorrectNetwork(): Promise<void> {
     if (!this.isInstalled()) return;
     const chainId: string = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId.toLowerCase() !== appConfig.chainHex.toLowerCase()) {
+    if (chainId.toLowerCase() === appConfig.chainHex.toLowerCase()) return;
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: appConfig.chainHex }],
+      });
+    } catch (err: any) {
+      // 4902 means the chain simply isn't in the wallet yet. Some builds bury it
+      // inside a -32603 wrapper, so check the nested code too.
+      const code = err?.code ?? err?.data?.originalError?.code;
+      if (code !== 4902) {
+        throw walletError(err, `Please switch MetaMask to ${appConfig.chainName}.`);
+      }
       try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: appConfig.chainHex }],
-        });
-      } catch (err: any) {
-        if (err.code === 4902) {
-          await this.addNetwork();
-        } else {
-          throw new Error(`Please switch MetaMask to ${appConfig.chainName}.`);
-        }
+        await this.addNetwork();
+      } catch (addErr: any) {
+        throw walletError(addErr, `Could not add ${appConfig.chainName} to MetaMask.`);
       }
     }
   }
@@ -62,7 +93,9 @@ export class WalletAdapter {
       params: [{
         chainId: appConfig.chainHex,
         chainName: appConfig.chainName,
-        nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+        // Polygon renamed MATIC to POL; MetaMask validates this against its own
+        // record for chain 80002 and rejects the call outright on a mismatch.
+        nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
         rpcUrls: appConfig.rpcUrls,
         blockExplorerUrls: appConfig.explorerUrl ? [appConfig.explorerUrl] : [],
       }],

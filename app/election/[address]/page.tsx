@@ -29,7 +29,7 @@ type Phase = "idle" | "loading" | "confirming" | "success" | "error";
 
 export default function ElectionPage() {
   const { address } = useParams<{ address: string }>();
-  const { account, connect, isConnecting } = useWallet();
+  const { account, connect, isConnecting, error: walletError } = useWallet();
 
   const [info, setInfo]                   = useState<ElectionInfo | null>(null);
   const [candidates, setCandidates]       = useState<CandidateResult[]>([]);
@@ -224,6 +224,12 @@ export default function ElectionPage() {
               <button className="btn btn-primary btn-full" onClick={connect} disabled={isConnecting}>
                 {isConnecting ? "Connecting…" : "Connect MetaMask"}
               </button>
+              {walletError && (
+                <div className="alert alert-error" role="alert" style={{ marginTop: 14, textAlign: "left" }}>
+                  <span className="alert-icon">❌</span>
+                  <span>{walletError}</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="card" style={{ marginBottom: 20 }}>

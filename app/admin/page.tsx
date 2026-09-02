@@ -60,7 +60,7 @@ function VoterList({ voters, onRemove }: { voters: string[]; onRemove: (v: strin
 
 // ── Main Page ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const { account, connect, isConnecting } = useWallet();
+  const { account, connect, isConnecting, error: walletError } = useWallet();
 
   const [factoryOwner, setFactoryOwner] = useState<string | null>(null);
   const [elections, setElections]       = useState<ElectionRecord[]>([]);
@@ -288,6 +288,13 @@ npm run deploy:amoy`
           <button className="btn btn-primary" onClick={connect} disabled={isConnecting}>
             {isConnecting ? "Connecting…" : "Connect MetaMask"}
           </button>
+          {walletError && (
+            <div className="alert alert-error" role="alert"
+                 style={{ marginTop: 16, textAlign: "left", maxWidth: 420, marginInline: "auto" }}>
+              <span className="alert-icon">❌</span>
+              <span>{walletError}</span>
+            </div>
+          )}
         </div>
       )}
 
